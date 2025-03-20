@@ -1,63 +1,3 @@
-import type {
-  ExcalidrawBindableElement,
-  ExcalidrawElement,
-  NonDeleted,
-  ExcalidrawLinearElement,
-  PointBinding,
-  NonDeletedExcalidrawElement,
-  ElementsMap,
-  NonDeletedSceneElementsMap,
-  ExcalidrawTextElement,
-  ExcalidrawArrowElement,
-  OrderedExcalidrawElement,
-  ExcalidrawElbowArrowElement,
-  FixedPoint,
-  SceneElementsMap,
-  FixedPointBinding,
-} from "./types";
-
-import type { Bounds } from "./bounds";
-import {
-  getCenterForBounds,
-  getElementBounds,
-  doBoundsIntersect,
-} from "./bounds";
-import type { AppState } from "../types";
-import { isPointOnShape } from "@excalidraw/utils/collision";
-import {
-  isArrowElement,
-  isBindableElement,
-  isBindingElement,
-  isBoundToContainer,
-  isElbowArrow,
-  isFixedPointBinding,
-  isFrameLikeElement,
-  isLinearElement,
-  isRectanguloidElement,
-  isTextElement,
-} from "./typeChecks";
-import type { ElementUpdate } from "./mutateElement";
-import { mutateElement } from "./mutateElement";
-import type Scene from "../scene/Scene";
-import { LinearElementEditor } from "./linearElementEditor";
-import {
-  arrayToMap,
-  isBindingFallthroughEnabled,
-  tupleToCoors,
-} from "../utils";
-import { KEYS } from "../keys";
-import { getBoundTextElement, handleBindTextResize } from "./textElement";
-import { aabbForElement, getElementShape, pointInsideBounds } from "../shapes";
-import {
-  compareHeading,
-  HEADING_DOWN,
-  HEADING_RIGHT,
-  HEADING_UP,
-  headingForPointFromElement,
-  vectorToHeading,
-  type Heading,
-} from "./heading";
-import type { LocalPoint, Radians } from "@excalidraw/math";
 import {
   lineSegment,
   pointFrom,
@@ -76,8 +16,71 @@ import {
   round,
   PRECISION,
 } from "@excalidraw/math";
+import { isPointOnShape } from "@excalidraw/utils/collision";
+
+import type { LocalPoint, Radians } from "@excalidraw/math";
+
+import { KEYS } from "../keys";
+import { aabbForElement, getElementShape, pointInsideBounds } from "../shapes";
+import {
+  arrayToMap,
+  isBindingFallthroughEnabled,
+  tupleToCoors,
+} from "../utils";
+
+import {
+  getCenterForBounds,
+  getElementBounds,
+  doBoundsIntersect,
+} from "./bounds";
 import { intersectElementWithLineSegment } from "./collision";
 import { distanceToBindableElement } from "./distance";
+import {
+  compareHeading,
+  HEADING_DOWN,
+  HEADING_RIGHT,
+  HEADING_UP,
+  headingForPointFromElement,
+  vectorToHeading,
+  type Heading,
+} from "./heading";
+import { LinearElementEditor } from "./linearElementEditor";
+import { mutateElement } from "./mutateElement";
+import { getBoundTextElement, handleBindTextResize } from "./textElement";
+import {
+  isArrowElement,
+  isBindableElement,
+  isBindingElement,
+  isBoundToContainer,
+  isElbowArrow,
+  isFixedPointBinding,
+  isFrameLikeElement,
+  isLinearElement,
+  isRectanguloidElement,
+  isTextElement,
+} from "./typeChecks";
+
+import type { Bounds } from "./bounds";
+import type { ElementUpdate } from "./mutateElement";
+import type {
+  ExcalidrawBindableElement,
+  ExcalidrawElement,
+  NonDeleted,
+  ExcalidrawLinearElement,
+  PointBinding,
+  NonDeletedExcalidrawElement,
+  ElementsMap,
+  NonDeletedSceneElementsMap,
+  ExcalidrawTextElement,
+  ExcalidrawArrowElement,
+  OrderedExcalidrawElement,
+  ExcalidrawElbowArrowElement,
+  FixedPoint,
+  SceneElementsMap,
+  FixedPointBinding,
+} from "./types";
+import type Scene from "../scene/Scene";
+import type { AppState } from "../types";
 
 export type SuggestedBinding =
   | NonDeleted<ExcalidrawBindableElement>
@@ -484,31 +487,30 @@ export const bindLinearElement = (
     return;
   }
 
-  const binding: PointBinding | FixedPointBinding = {
+  let binding: PointBinding | FixedPointBinding = {
     elementId: hoveredElement.id,
-    ...(isElbowArrow(linearElement)
-      ? {
-          ...calculateFixedPointForElbowArrowBinding(
-            linearElement,
-            hoveredElement,
-            startOrEnd,
-            elementsMap,
-          ),
-          focus: 0,
-          gap: 0,
-        }
-      : {
-          ...normalizePointBinding(
-            calculateFocusAndGap(
-              linearElement,
-              hoveredElement,
-              startOrEnd,
-              elementsMap,
-            ),
-            hoveredElement,
-          ),
-        }),
+    ...normalizePointBinding(
+      calculateFocusAndGap(
+        linearElement,
+        hoveredElement,
+        startOrEnd,
+        elementsMap,
+      ),
+      hoveredElement,
+    ),
   };
+
+  if (isElbowArrow(linearElement)) {
+    binding = {
+      ...binding,
+      ...calculateFixedPointForElbowArrowBinding(
+        linearElement,
+        hoveredElement,
+        startOrEnd,
+        elementsMap,
+      ),
+    };
+  }
 
   mutateElement(linearElement, {
     [startOrEnd === "start" ? "startBinding" : "endBinding"]: binding,
@@ -1269,39 +1271,35 @@ const updateBoundPoint = (
       pointDistance(adjacentPoint, edgePointAbsolute) +
       pointDistance(adjacentPoint, center) +
       Math.max(bindableElement.width, bindableElement.height) * 2;
-    const intersections = intersectElementWithLineSegment(
-      bindableElement,
-      lineSegment<GlobalPoint>(
-        adjacentPoint,
-        pointFromVector(
-          vectorScale(
-            vectorNormalize(vectorFromPoint(focusPointAbsolute, adjacentPoint)),
-            interceptorLength,
-          ),
+    const intersections = [
+      ...intersectElementWithLineSegment(
+        bindableElement,
+        lineSegment<GlobalPoint>(
           adjacentPoint,
+          pointFromVector(
+            vectorScale(
+              vectorNormalize(
+                vectorFromPoint(focusPointAbsolute, adjacentPoint),
+              ),
+              interceptorLength,
+            ),
+            adjacentPoint,
+          ),
         ),
+        binding.gap,
+      ).sort(
+        (g, h) =>
+          pointDistanceSq(g, adjacentPoint) - pointDistanceSq(h, adjacentPoint),
       ),
-      binding.gap,
-    ).sort(
-      (g, h) =>
-        pointDistanceSq(g, adjacentPoint) - pointDistanceSq(h, adjacentPoint),
-    );
-
-    // debugClear();
-    // debugDrawPoint(intersections[0], { color: "red", permanent: true });
-    // debugDrawLine(
-    //   lineSegment<GlobalPoint>(
-    //     adjacentPoint,
-    //     pointFromVector(
-    //       vectorScale(
-    //         vectorNormalize(vectorFromPoint(focusPointAbsolute, adjacentPoint)),
-    //         interceptorLength,
-    //       ),
-    //       adjacentPoint,
-    //     ),
-    //   ),
-    //   { permanent: true, color: "green" },
-    // );
+      // Fallback when arrow doesn't point to the shape
+      pointFromVector(
+        vectorScale(
+          vectorNormalize(vectorFromPoint(focusPointAbsolute, adjacentPoint)),
+          pointDistance(adjacentPoint, edgePointAbsolute),
+        ),
+        adjacentPoint,
+      ),
+    ];
 
     if (intersections.length > 1) {
       // The adjacent point is outside the shape (+ gap)
@@ -1723,21 +1721,6 @@ const determineFocusDistance = (
           : Math.sqrt(element.width ** 2 + element.height ** 2) / 2),
     )
     .sort((g, h) => Math.abs(g) - Math.abs(h));
-
-  // debugClear();
-  // [
-  //   lineSegmentIntersectionPoints(rotatedInterceptor, interceptees[0]),
-  //   lineSegmentIntersectionPoints(rotatedInterceptor, interceptees[1]),
-  // ]
-  //   .filter((p): p is GlobalPoint => p !== null)
-  //   .forEach((p) => debugDrawPoint(p, { color: "black", permanent: true }));
-  // debugDrawPoint(determineFocusPoint(element, ordered[0] ?? 0, rotatedA), {
-  //   color: "red",
-  //   permanent: true,
-  // });
-  // debugDrawLine(rotatedInterceptor, { color: "green", permanent: true });
-  // debugDrawLine(interceptees[0], { color: "red", permanent: true });
-  // debugDrawLine(interceptees[1], { color: "red", permanent: true });
 
   const signedDistanceRatio = ordered[0] ?? 0;
 
