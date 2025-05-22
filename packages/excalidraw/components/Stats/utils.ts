@@ -1,21 +1,17 @@
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
-import {
-  bindOrUnbindLinearElements,
-  updateBoundElements,
-} from "@excalidraw/element/binding";
-import { getBoundTextElement } from "@excalidraw/element/textElement";
-import {
-  isFrameLikeElement,
-  isLinearElement,
-  isTextElement,
-} from "@excalidraw/element/typeChecks";
+import { getBoundTextElement } from "@excalidraw/element";
+import { isFrameLikeElement, isTextElement } from "@excalidraw/element";
 
 import {
   getSelectedGroupIds,
   getElementsInGroup,
   isInGroup,
-} from "@excalidraw/element/groups";
+} from "@excalidraw/element";
+
+import { getFrameChildren } from "@excalidraw/element";
+
+import { updateBindings } from "@excalidraw/element";
 
 import type { Radians } from "@excalidraw/math";
 
@@ -25,7 +21,7 @@ import type {
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
-import type Scene from "@excalidraw/element/Scene";
+import type { Scene } from "@excalidraw/element";
 
 import type { AppState } from "../../types";
 
@@ -39,6 +35,7 @@ export type StatsInputProperty =
   | "gridStep";
 
 export const SMALLEST_DELTA = 0.01;
+export const STEP_SIZE = 10;
 
 export const isPropertyEditable = (
   element: ExcalidrawElement,
@@ -172,6 +169,51 @@ export const moveElement = (
         { informMutation: shouldInformMutation, isDragging: false },
       );
   }
+
+  if (isFrameLikeElement(originalElement)) {
+    const originalChildren = getFrameChildren(
+      originalElementsMap,
+      originalElement.id,
+    );
+    originalChildren.forEach((child) => {
+      const latestChildElement = elementsMap.get(child.id);
+
+      if (!latestChildElement) {
+        return;
+      }
+
+      const [childCX, childCY] = [
+        child.x + child.width / 2,
+        child.y + child.height / 2,
+      ];
+      const [childTopLeftX, childTopLeftY] = pointRotateRads(
+        pointFrom(child.x, child.y),
+        pointFrom(childCX, childCY),
+        child.angle,
+      );
+
+      const childNewTopLeftX = Math.round(childTopLeftX + changeInX);
+      const childNewTopLeftY = Math.round(childTopLeftY + changeInY);
+
+      const [childX, childY] = pointRotateRads(
+        pointFrom(childNewTopLeftX, childNewTopLeftY),
+        pointFrom(childCX + changeInX, childCY + changeInY),
+        -child.angle as Radians,
+      );
+
+      scene.mutateElement(
+        latestChildElement,
+        {
+          x: childX,
+          y: childY,
+        },
+        { informMutation: shouldInformMutation, isDragging: false },
+      );
+      updateBindings(latestChildElement, scene, {
+        simultaneouslyUpdated: originalChildren,
+      });
+    });
+  }
 };
 
 export const getAtomicUnits = (
@@ -193,20 +235,4 @@ export const getAtomicUnits = (
       });
     });
   return _atomicUnits;
-};
-
-export const updateBindings = (
-  latestElement: ExcalidrawElement,
-  scene: Scene,
-  options?: {
-    simultaneouslyUpdated?: readonly ExcalidrawElement[];
-    newSize?: { width: number; height: number };
-    zoom?: AppState["zoom"];
-  },
-) => {
-  if (isLinearElement(latestElement)) {
-    bindOrUnbindLinearElements([latestElement], true, [], scene, options?.zoom);
-  } else {
-    updateBoundElements(latestElement, scene, options);
-  }
 };
