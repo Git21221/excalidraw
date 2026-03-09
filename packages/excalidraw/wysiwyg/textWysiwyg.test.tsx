@@ -5,13 +5,13 @@ import { getOriginalContainerHeightFromCache } from "@excalidraw/element";
 
 import {
   CODES,
+  colorToHex,
   KEYS,
   FONT_FAMILY,
   TEXT_ALIGN,
   THEME,
   VERTICAL_ALIGN,
   applyDarkModeFilter,
-  tinycolor,
 } from "@excalidraw/common";
 
 import type {
@@ -1550,7 +1550,6 @@ describe("textWysiwyg", () => {
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).verticalAlign,
       ).toBe(VERTICAL_ALIGN.BOTTOM);
-
       // Attempt to Bind 2nd text using text tool
       UI.clickTool("text");
       mouse.clickAt(
@@ -1672,7 +1671,7 @@ describe("textWysiwyg", () => {
 
     // Helper to compare colors (browser may return rgb format)
     const colorsAreEqual = (color1: string, color2: string) => {
-      return tinycolor(color1).toHex() === tinycolor(color2).toHex();
+      return colorToHex(color1) === colorToHex(color2);
     };
 
     beforeEach(async () => {

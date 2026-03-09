@@ -10,11 +10,10 @@ import {
   isWritableElement,
 } from "@excalidraw/common";
 
-import { actionToggleShapeSwitch } from "@excalidraw/excalidraw/actions/actionToggleShapeSwitch";
-
-import { getShortcutKey } from "@excalidraw/excalidraw/shortcut";
-
 import type { MarkRequired } from "@excalidraw/common/utility-types";
+
+import { actionToggleShapeSwitch } from "../../actions/actionToggleShapeSwitch";
+import { getShortcutKey } from "../../shortcut";
 
 import {
   actionClearCanvas,
@@ -44,7 +43,6 @@ import { getSelectedElements } from "../../scene";
 import {
   LockedIcon,
   UnlockedIcon,
-  clockIcon,
   searchIcon,
   boltIcon,
   bucketFillIcon,
@@ -52,6 +50,7 @@ import {
   mermaidLogoIcon,
   brainIconThin,
   LibraryIcon,
+  historyCommandIcon,
 } from "../icons";
 
 import { SHAPES } from "../shapes";
@@ -928,7 +927,7 @@ function CommandPaletteInner({
                   marginLeft: "6px",
                 }}
               >
-                {clockIcon}
+                {historyCommandIcon}
               </div>
             </div>
             <CommandItem

@@ -1,5 +1,7 @@
 import { average } from "@excalidraw/math";
 
+import type { GlobalCoord } from "@excalidraw/math";
+
 import type { FontFamilyValues, FontString } from "@excalidraw/element/types";
 
 import type {
@@ -10,7 +12,6 @@ import type {
   Zoom,
 } from "@excalidraw/excalidraw/types";
 
-import { tinycolor } from "./colors";
 import {
   DEFAULT_VERSION,
   ENV,
@@ -87,7 +88,8 @@ export const isWritableElement = (
     (target.type === "text" ||
       target.type === "number" ||
       target.type === "password" ||
-      target.type === "search"));
+      target.type === "search")) ||
+  (target instanceof HTMLElement && target.closest(".cm-editor") !== null);
 
 export const getFontFamilyString = ({
   fontFamily,
@@ -149,38 +151,27 @@ export const debounce = <T extends any[]>(
   return ret;
 };
 
-// throttle callback to execute once per animation frame
-export const throttleRAF = <T extends any[]>(
-  fn: (...args: T) => void,
-  opts?: { trailing?: boolean },
-) => {
+// throttle callback to execute once per animation frame using the latest args
+export const throttleRAF = <T extends any[]>(fn: (...args: T) => void) => {
   let timerId: number | null = null;
   let lastArgs: T | null = null;
-  let lastArgsTrailing: T | null = null;
 
-  const scheduleFunc = (args: T) => {
+  const scheduleFunc = () => {
     timerId = window.requestAnimationFrame(() => {
       timerId = null;
-      fn(...args);
+      const args = lastArgs;
       lastArgs = null;
-      if (lastArgsTrailing) {
-        lastArgs = lastArgsTrailing;
-        lastArgsTrailing = null;
-        scheduleFunc(lastArgs);
+
+      if (args) {
+        fn(...args);
       }
     });
   };
 
   const ret = (...args: T) => {
-    if (isTestEnv()) {
-      fn(...args);
-      return;
-    }
     lastArgs = args;
     if (timerId === null) {
-      scheduleFunc(lastArgs);
-    } else if (opts?.trailing) {
-      lastArgsTrailing = args;
+      scheduleFunc();
     }
   };
   ret.flush = () => {
@@ -189,12 +180,12 @@ export const throttleRAF = <T extends any[]>(
       timerId = null;
     }
     if (lastArgs) {
-      fn(...(lastArgsTrailing || lastArgs));
-      lastArgs = lastArgsTrailing = null;
+      fn(...lastArgs);
+      lastArgs = null;
     }
   };
   ret.cancel = () => {
-    lastArgs = lastArgsTrailing = null;
+    lastArgs = null;
     if (timerId !== null) {
       cancelAnimationFrame(timerId);
       timerId = null;
@@ -442,7 +433,7 @@ export const viewportCoordsToSceneCoords = (
   const x = (clientX - offsetLeft) / zoom.value - scrollX;
   const y = (clientY - offsetTop) / zoom.value - scrollY;
 
-  return { x, y };
+  return { x, y } as GlobalCoord;
 };
 
 export const sceneCoordsToViewportCoords = (
@@ -546,10 +537,6 @@ export const mapFind = <T, K>(
     }
   }
   return undefined;
-};
-
-export const isTransparent = (color: string) => {
-  return tinycolor(color).getAlpha() === 0;
 };
 
 export type ResolvablePromise<T> = Promise<T> & {
@@ -1334,4 +1321,11 @@ export const setFeatureFlag = <F extends keyof FEATURE_FLAGS>(
   } catch (e) {
     console.error("unable to set feature flag", e);
   }
+};
+
+export const oneOf = <N extends string | number | symbol | null, H extends N>(
+  needle: N,
+  haystack: readonly H[],
+): needle is H => {
+  return haystack.includes(needle as any);
 };
